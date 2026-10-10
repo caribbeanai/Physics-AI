@@ -1,0 +1,11 @@
+.cdsapirc
+.env
+.env.*
+data/
+artifacts/
+*.nc
+*.grib
+*.grb
+__pycache__/
+*.pyc
+.ipynb_checkpoints/

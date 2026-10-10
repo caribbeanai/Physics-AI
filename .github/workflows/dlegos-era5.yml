@@ -1,0 +1,70 @@
+name: D-LEGOS ERA5 Caribbean acquisition
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Bounded retrieval: sample = first 2 days; monthly = full selected month (6-hourly)"
+        type: choice
+        required: true
+        default: sample
+        options:
+          - sample
+          - monthly
+      year:
+        description: "ERA5 year (1981–2025)"
+        type: string
+        required: true
+        default: "2017"
+      month:
+        description: "Month number (1–12)"
+        type: string
+        required: true
+        default: "1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dlegos-era5-acquisition
+  cancel-in-progress: false
+
+jobs:
+  acquire-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout research code
+        uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: dlegos-pisr-caribbean/requirements.txt
+
+      - name: Install ERA5 retrieval and validation dependencies
+        run: python -m pip install --disable-pip-version-check "cdsapi>=0.7" "xarray>=2024.1" "netcdf4>=1.6" "numpy>=1.26"
+
+      - name: Retrieve and validate ERA5 Caribbean sample
+        env:
+          CDSAPI_KEY: ${{ secrets.CDSAPI_KEY }}
+          ERA5_MODE: ${{ inputs.mode }}
+          ERA5_YEAR: ${{ inputs.year }}
+          ERA5_MONTH: ${{ inputs.month }}
+        run: |
+          set -euo pipefail
+          python dlegos-pisr-caribbean/scripts/download_era5_ci.py \
+            --mode "$ERA5_MODE" --year "$ERA5_YEAR" --month "$ERA5_MONTH" \
+            --output-dir artifacts/era5
+
+      - name: Upload validated ERA5 data and provenance manifest
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: era5-caribbean-${{ inputs.mode }}-${{ inputs.year }}-${{ inputs.month }}
+          path: artifacts/era5/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 6

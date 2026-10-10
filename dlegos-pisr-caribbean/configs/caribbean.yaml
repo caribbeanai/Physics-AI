@@ -1,0 +1,32 @@
+domain:
+  north: 30.0
+  west: -90.0
+  south: 5.0
+  east: -55.0
+variables:
+  - 2m_temperature
+  - 2m_dewpoint_temperature
+  - surface_pressure
+  - 10m_u_component_of_wind
+  - 10m_v_component_of_wind
+splits:
+  train: [1981, 2015]
+  val: [2016, 2016]
+  test: [2017, 2018]
+  temporal_holdout: [2019, 2025]
+resolution:
+  target_deg: 0.25
+  primary_input_deg: 1.0
+  additional_inputs_deg: [0.5, 2.0]
+training:
+  temporal_stride_hours: 6
+  history_steps: 3
+  patch_size: 32
+  epochs: 50
+  batch_size: 8
+  learning_rate: 0.0002
+loss:
+  reconstruction: 1.0
+  physics: 0.05
+  interface: 0.02
+  multiscale: 0.02

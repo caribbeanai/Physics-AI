@@ -49,7 +49,7 @@ jobs:
 
       - name: Retrieve and validate ERA5 Caribbean sample
         env:
-          CDSAPI_KEY: ${{ secrets.CDSAPI_KEY }}
+          CDSAPI_KEY: ${{ secrets.Climatedatapull }}
           ERA5_MODE: ${{ inputs.mode }}
           ERA5_YEAR: ${{ inputs.year }}
           ERA5_MONTH: ${{ inputs.month }}

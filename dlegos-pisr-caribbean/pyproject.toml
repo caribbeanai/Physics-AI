@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dlegos-pisr"
+version = "0.1.0"
+description = "Modular physics-informed super-resolution tools for gridded geophysical fields"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Research use; see repository license" }
+dependencies = ["torch>=2.2"]
+
+[project.optional-dependencies]
+data = ["xarray>=2024.1", "netCDF4>=1.6", "cdsapi>=0.7"]
+research = ["numpy>=1.26", "scipy>=1.12", "pandas>=2.2", "matplotlib>=3.8", "pyyaml>=6.0", "tqdm>=4.66", "scikit-image>=0.22"]
+dev = ["pytest>=8.0", "build>=1.2"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

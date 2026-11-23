@@ -102,6 +102,8 @@ def iter_tiles(
     th, tw = (tile_size, tile_size) if isinstance(tile_size, int) else tile_size
     oh, ow = (overlap, overlap) if isinstance(overlap, int) else overlap
     h, w = tensor.shape[-2:]
+    if h == 0 or w == 0:
+        raise ValueError("Spatial dimensions must not be empty.")
     if min(th, tw) <= 0 or min(oh, ow) < 0 or oh >= th or ow >= tw:
         raise ValueError("Tile sizes must be positive; overlap must be non-negative and smaller than tile size.")
     th, tw = min(th, h), min(tw, w)
@@ -120,15 +122,31 @@ def stitch_tiles(
     """Reconstruct a field by uniform weighted overlap-add.
 
     The leading dimensions are taken from the first tile. Every output pixel
-    must be covered by at least one tile.
+    must be covered by at least one tile. Integer inputs return a floating
+    average. All tiles must have matching leading dimensions, dtype and device.
     """
     if not tiles:
         raise ValueError("At least one tile is required.")
     h, w = output_shape
+    if h <= 0 or w <= 0:
+        raise ValueError("Output spatial dimensions must be positive.")
     first = tiles[0][1]
-    out = first.new_zeros((*first.shape[:-2], h, w))
-    weights = first.new_zeros((h, w))
+    if first.ndim < 2:
+        raise ValueError("Tile tensors must end in two spatial dimensions.")
+    result_dtype = (
+        first.dtype if first.is_floating_point() or first.is_complex()
+        else torch.get_default_dtype()
+    )
+    accumulation_dtype = torch.promote_types(result_dtype, torch.float32)
+    out = first.new_zeros((*first.shape[:-2], h, w), dtype=accumulation_dtype)
+    weights = first.new_zeros((h, w), dtype=torch.int64)
     for window, value in tiles:
+        if value.dtype != first.dtype or value.device != first.device:
+            raise ValueError("All tile tensors must have the same dtype and device.")
+        if value.shape[:-2] != first.shape[:-2] or value.ndim != first.ndim:
+            raise ValueError("All tile tensors must have the same leading dimensions.")
+        if not (0 <= window.y0 < window.y1 <= h and 0 <= window.x0 < window.x1 <= w):
+            raise ValueError("Tile window must be non-empty and inside the output grid.")
         sy, sx = window.slices
         if value.shape[-2:] != (window.y1 - window.y0, window.x1 - window.x0):
             raise ValueError("Tile tensor shape does not match its Tile window.")
@@ -136,4 +154,4 @@ def stitch_tiles(
         weights[sy, sx] += 1
     if torch.any(weights == 0):
         raise ValueError("Tile set leaves uncovered pixels.")
-    return out / weights
+    return (out / weights).to(result_dtype)

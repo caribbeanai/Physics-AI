@@ -54,7 +54,8 @@ print({name: value.item() for name, value in scores.items()})
 for arrays whose final two dimensions are latitude and longitude.
 `stitch_tiles(...)` reconstructs the full grid with uniform overlap averaging.
 No padding or boundary conditions are invented. Ensure the tiles cover the
-entire domain.
+entire domain. Tile tensors must agree on their leading dimensions, dtype and
+device. Integer tiles are reconstructed as floating-point averages.
 
 ## Physics and evaluation
 
@@ -62,7 +63,17 @@ The existing `physics_terms`, `normalized_physical_consistency`, and
 `interface_consistency` functions are available from the package root. The
 precipitation metrics report critical success index (CSI) and fractions skill
 score (FSS) for thresholded fields. Thresholds use the same units as the data.
-They are verification tools; they do not by themselves establish forecast
+The metrics return floating-point values even for integer fields. Use a positive
+odd FSS window. At grid edges, points outside the grid count as non-events.
+Both scores return 1 when neither field contains an event. FSS pools the
+numerator and denominator over all leading fields before dividing.
+
+The existing `physics_terms` and `normalized_physical_consistency` functions
+take state tensors in (batch, time, variable, latitude, longitude) order. To
+use a `SpacetimeCube` with those functions, pass
+`cube.values.transpose(1, 2)` and supply the latitude grid.
+
+These are verification tools; they do not by themselves establish forecast
 skill or hydrological value.
 
 The attached NowcastNet/HRRR evaluation paper motivates evaluating heavy-event

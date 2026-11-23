@@ -12,14 +12,21 @@ def _check_pair(prediction: torch.Tensor, target: torch.Tensor) -> None:
         raise ValueError("Inputs cannot be empty.")
 
 
+def _score_dtype(prediction: torch.Tensor, target: torch.Tensor) -> torch.dtype:
+    # Integer and reduced-precision input must still produce fractional scores.
+    return torch.promote_types(torch.float32, torch.promote_types(prediction.dtype, target.dtype))
+
+
 def mae(prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     _check_pair(prediction, target)
-    return (prediction - target).abs().mean()
+    dtype = _score_dtype(prediction, target)
+    return (prediction.to(dtype) - target.to(dtype)).abs().mean()
 
 
 def rmse(prediction: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     _check_pair(prediction, target)
-    return torch.sqrt(torch.mean((prediction - target) ** 2))
+    dtype = _score_dtype(prediction, target)
+    return torch.sqrt(torch.mean((prediction.to(dtype) - target.to(dtype)) ** 2))
 
 
 def critical_success_index(
@@ -31,11 +38,10 @@ def critical_success_index(
     _check_pair(prediction, target)
     forecast_event = prediction >= threshold
     observed_event = target >= threshold
-    hits = (forecast_event & observed_event).sum(dtype=torch.float64)
-    misses = (~forecast_event & observed_event).sum(dtype=torch.float64)
-    false_alarms = (forecast_event & ~observed_event).sum(dtype=torch.float64)
-    denominator = hits + misses + false_alarms
-    return torch.where(denominator > 0, hits / denominator, denominator.new_tensor(1.0)).to(prediction.dtype)
+    hits = (forecast_event & observed_event).sum()
+    union = (forecast_event | observed_event).sum()
+    score = hits.to(_score_dtype(prediction, target)) / union.clamp_min(1)
+    return torch.where(union > 0, score, score.new_tensor(1.0))
 
 
 def fractions_skill_score(
@@ -46,22 +52,27 @@ def fractions_skill_score(
 ) -> torch.Tensor:
     """Neighborhood FSS for 2-D fields or tensors ending in (lat, lon).
 
-    The score is 1 for a perfect match. Leading dimensions are treated as
-    independent fields and averaged.
+    Use a positive odd window to centre a square neighbourhood on each grid
+    cell. Outside-grid cells count as non-events via zero padding. Leading
+    dimensions are independent fields; sum squared differences and reference
+    terms over all fields before taking their ratio. Return 1 for a perfect
+    match or when neither field has an event.
     """
     _check_pair(prediction, target)
-    if window < 1:
-        raise ValueError("window must be at least 1.")
+    if isinstance(window, bool) or not isinstance(window, int) or window < 1 or window % 2 == 0:
+        raise ValueError("window must be a positive odd integer.")
     if prediction.ndim < 2:
         raise ValueError("Inputs must end in latitude and longitude dimensions.")
     shape = prediction.shape
-    pred_event = (prediction >= threshold).to(prediction.dtype).reshape(-1, 1, *shape[-2:])
-    obs_event = (target >= threshold).to(target.dtype).reshape(-1, 1, *shape[-2:])
+    dtype = _score_dtype(prediction, target)
+    pred_event = (prediction >= threshold).to(dtype).reshape(-1, 1, *shape[-2:])
+    obs_event = (target >= threshold).to(dtype).reshape(-1, 1, *shape[-2:])
     pred_frac = F.avg_pool2d(pred_event, window, stride=1, padding=window // 2)
     obs_frac = F.avg_pool2d(obs_event, window, stride=1, padding=window // 2)
     numerator = torch.mean((pred_frac - obs_frac) ** 2)
     denominator = torch.mean(pred_frac**2 + obs_frac**2)
-    return torch.where(denominator > 0, 1 - numerator / denominator, denominator.new_tensor(1.0))
+    safe_denominator = torch.where(denominator > 0, denominator, denominator.new_tensor(1.0))
+    return 1 - numerator / safe_denominator
 
 
 def precipitation_scores(

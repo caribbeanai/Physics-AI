@@ -19,5 +19,10 @@ Splits: train 1981–2015, validation 2016, test 2017–2018, plus temporal hold
 ## Metrics
 RMSE/MAE by variable; physical consistency residuals; D-LEGOS Interface Physical Consistency (IPC); later SSIM/spectral diagnostics and extreme-event skill.
 
+## Python library
+The `dlegos_pisr` package now provides installable model APIs, named spatiotemporal cubes, overlap-aware spatial tiling, physics utilities, and precipitation CSI/FSS metrics. See [docs/PYTHON_LIBRARY.md](docs/PYTHON_LIBRARY.md) for installation and examples.
+
+Install from this directory with `python -m pip install -e .`.
+
 ## Research integrity
-No scientific result should be reported until ERA5 has been downloaded and the full benchmark has run. Synthetic smoke tests validate software behavior only.
+No scientific result should be reported until ERA5 has been downloaded and the full benchmark has run. Library smoke tests validate software behavior only.
